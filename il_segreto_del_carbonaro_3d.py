@@ -60,9 +60,20 @@ ENIGMI = [
                     "austriaci, lodando un compositore. Ma è l'acronimo del "
                     "futuro Re d'Italia. Chi è il musicista?"),
         "soluzioni": ["verdi", "giuseppe verdi", "viva verdi"],
-        "frammento": "OBBE",
+        "frammento": "OB",
         "curiosita": ("Gli austriaci cancellavano le scritte attirandosi "
                       "l'odio dei melomani europei!"),
+    },
+    {
+        "id": "inno",
+        "nome": "Inno",
+        "titolo": "Il Canto degli Italiani",
+        "domanda": "Siediti al pianoforte e suona lo spartito sul leggio.",
+        "soluzioni": [],
+        "frammento": "BE",
+        "curiosita": ("Goffredo Mameli scrisse il testo a Genova e Michele Novaro lo mise in musica "
+                      "proprio qui a Torino, nel novembre del 1847. Diventò inno nazionale "
+                      "provvisorio nel 1946 e ufficiale soltanto nel 2017."),
     },
     {
         "id": "mappa",
@@ -102,6 +113,10 @@ ENIGMI = [
     },
 ]
 ENIGMI_PER_ID = {e["id"]: e for e in ENIGMI}
+N_ENIGMI = len(ENIGMI)
+# "Fratelli d'Italia, l'Italia s'è desta…" (M. Novaro, 1847), in Sol maggiore
+INNO = [("Re", 62), ("Re", 62), ("Mi", 64), ("Re", 62), ("Si", 71), ("Si", 71), ("Do", 72), ("Si", 71),
+        ("Si", 71), ("Re", 74), ("Do", 72), ("Si", 71), ("La", 69), ("Si", 71), ("La", 69), ("Sol", 67)]
 PAROLA_ORDINE = "obbedisco"
 
 TRAMA = ("4 maggio 1860. Sei un corriere della Carboneria, nascosto nello studio "
@@ -514,20 +529,36 @@ def img_ritratto():
 
 
 def img_spartito():
-    w, h = 384, 256
+    """Spartito dell'inizio del Canto degli Italiani, con il nome di ogni nota."""
+    w, h = 768, 512
     img = img_pergamena(w, h, bordo=False, seme=3)
     d = ImageDraw.Draw(img)
-    d.text((w // 2, 28), "Va, pensiero", font=font_pil("i", 30), fill=(44, 30, 22), anchor="mm")
-    d.text((w - 30, 56), "G. V.", font=font_pil("i", 16), fill=(44, 30, 22), anchor="rm")
-    rnd = random.Random(5)
-    for s in range(3):
-        y0 = 80 + s * 58
+    ink = (30, 20, 14)
+    d.text((w // 2, 44), "Il Canto degli Italiani", font=font_pil("i", 50), fill=ink, anchor="mm")
+    d.text((w // 2, 92), "M. Novaro  ·  Torino, 1847", font=font_pil("r", 24), fill=(90, 60, 40), anchor="mm")
+    gradini = {62: -1, 64: 0, 67: 2, 69: 3, 71: 4, 72: 5, 74: 6}     # posizione sul rigo (Mi4 = 1ª riga)
+    passo = 11
+    for riga in range(2):
+        base = 250 + riga * 190                                     # y della riga più bassa
         for k in range(5):
-            d.line([(24, y0 + k * 8), (w - 24, y0 + k * 8)], fill=(80, 60, 44), width=1)
-        for x in range(50, w - 30, 26):
-            yy = y0 + rnd.randint(-1, 8) * 4
-            d.ellipse((x - 5, yy - 4, x + 5, yy + 4), fill=(30, 20, 14))
-            d.line([(x + 4, yy), (x + 4, yy - 26)], fill=(30, 20, 14), width=2)
+            d.line([(40, base - k * 2 * passo), (w - 40, base - k * 2 * passo)], fill=(80, 60, 44), width=2)
+        d.text((56, base - 8 * passo), "#", font=font_pil("b", 30), fill=ink, anchor="mm")   # Fa diesis
+        for b in (4,):
+            x = 110 + b * 78 - 39
+            d.line([(x, base), (x, base - 8 * passo)], fill=(80, 60, 44), width=2)
+        d.line([(w - 42, base), (w - 42, base - 8 * passo)], fill=(80, 60, 44), width=3)
+        for k in range(8):
+            nome, midi = INNO[riga * 8 + k]
+            x = 110 + k * 78 + (20 if k >= 4 else 0)
+            y = base - gradini[midi] * passo
+            if gradini[midi] < 0:
+                d.line([(x - 20, base + 2 * passo), (x + 20, base + 2 * passo)], fill=ink, width=2)
+            d.ellipse((x - 13, y - 10, x + 13, y + 10), fill=ink)
+            if gradini[midi] < 4:
+                d.line([(x + 12, y), (x + 12, y - 70)], fill=ink, width=3)
+            else:
+                d.line([(x - 12, y), (x - 12, y + 70)], fill=ink, width=3)
+            d.text((x, base + 58), nome, font=font_pil("b", 28), fill=(120, 24, 40), anchor="mm")
     return img
 
 
@@ -1341,6 +1372,7 @@ class Gioco(Entity):
     def _costruisci_pianoforte(self):
         r = Entity(parent=self.mondo, position=(-1.95, 0, 2.2), rotation_y=-90)
         self.interattivi["pianoforte"] = r
+        self.interattivi["inno"] = r
         cassa = Entity(parent=r)
         cassa.set_shader_input("lucido", 1.0)
         blocco(cassa, (0, .86, .45), (1.5, .3, 1.2), col=NERO_LACCA)
@@ -1371,11 +1403,11 @@ class Gioco(Entity):
             t.y0 = t.y
         # punti di vista per quando ci si siede a suonare
         self.piano_occhi = Entity(parent=r, position=(0, 1.5, -1.3))
-        self.piano_mira = Entity(parent=r, position=(0, .86, -.1))
+        self.piano_mira = Entity(parent=r, position=(0, .93, -.1))
         blocco(r, (0, .86, -.14), (1.5, .14, .06), col=NERO_LACCA)
         # leggio con spartito
-        blocco(r, (0, 1.12, -.07), (.62, .4, .02), col=C(20, 16, 18), rot=(-15, 0, 0))
-        blocco(r, (0, 1.13, -.085), (.56, .36, .005), texture=self.t_spartito, rot=(-15, 0, 0))
+        blocco(r, (0, 1.2, -.07), (.62, .4, .02), col=C(20, 16, 18), rot=(-15, 0, 0))
+        blocco(r, (0, 1.21, -.085), (.56, .36, .005), texture=self.t_spartito, rot=(-15, 0, 0))
         # gambe e pedali
         for (x, z) in ((-.65, -.1), (.65, -.1), (.1, 1.6)):
             blocco(r, (x, .37, z), (.1, .74, .1), col=NERO_LACCA, model=cilindro(10, start=-.5))
@@ -1595,17 +1627,17 @@ class Gioco(Entity):
         self.testo_timer = testo_ui(self.hud, "45:00", (0, .42), 2.9, ORO_CHIARO, "b", z=-.01)
         self.barra_tempo = quad_ui(self.hud, (0, .364), (.3, .008), ORO)
         # frammenti
-        quad_ui(self.hud, (0, -.425), (.84, .15), color.white, self.t_pergamena_larga)
+        quad_ui(self.hud, (0, -.425), (.98, .15), color.white, self.t_pergamena_larga)
         testo_ui(self.hud, "FRAMMENTI DELLA CHIAVE", (0, -.375), .75, BORDEAUX_SCURO, "b", z=-.01)
         self.slot = []
         for i, e in enumerate(ENIGMI):
-            x = -.285 + i * .19
-            quad_ui(self.hud, (x, -.432), (.16, .065), color.white, self.t_slot, z=-.01)
+            x = (i - (N_ENIGMI - 1) / 2) * .18
+            quad_ui(self.hud, (x, -.432), (.145, .065), color.white, self.t_slot, z=-.01)
             t = testo_ui(self.hud, "? ? ?", (x, -.43), 1.3, C(150, 124, 90), "b", z=-.02)
             testo_ui(self.hud, e["nome"], (x, -.478), .6, C(110, 84, 60), "i", z=-.02)
             self.slot.append(t)
-            if i < 3:
-                testo_ui(self.hud, "+", (x + .095, -.43), 1.6, BORDEAUX, "b", z=-.02)
+            if i < N_ENIGMI - 1:
+                testo_ui(self.hud, "+", (x + .09, -.43), 1.5, BORDEAUX, "b", z=-.02)
         # mirino e suggerimenti
         self.mirino = Entity(parent=self.hud, model=Circle(16), scale=.008, color=C(240, 230, 210, 180))
         self.mirino_anello = Entity(parent=self.hud, model=Circle(24, mode="line", thickness=2), scale=.03,
@@ -1620,11 +1652,15 @@ class Gioco(Entity):
                               "Esc: pausa  ·  M: audio  ·  F11: schermo intero",
                               (0, -.49), .65, C(190, 170, 140), "i", (.5, -.5))
         self.guida_piano = Entity(parent=ui, enabled=False)
-        quad_ui(self.guida_piano, (0, -.27), (1.1, .1), C(8, 6, 8, 170))
-        testo_ui(self.guida_piano, "Suona!  Tasti bianchi: A S D F G H J K L   ·   neri: W E T Y U O P",
-                 (0, -.255), 1.05, ORO_CHIARO, "b", z=-.01)
-        testo_ui(self.guida_piano, "oppure clicca i tasti del pianoforte   ·   Esc per alzarti", (0, -.29), .9,
-                 PERGAMENA, "i", z=-.01)
+        quad_ui(self.guida_piano, (0, -.265), (1.25, .15), C(8, 6, 8, 180))
+        testo_ui(self.guida_piano, "A Do   S Re   D Mi   F Fa   G Sol   H La   J Si   K Do   L Re      (neri: W E T Y U O P)",
+                 (0, -.215), 1.0, ORO_CHIARO, "b", z=-.01)
+        testo_ui(self.guida_piano, "Suona lo spartito sul leggio  ·  puoi anche cliccare i tasti  ·  Esc per alzarti",
+                 (0, -.25), .85, PERGAMENA, "i", z=-.01)
+        self.pallini_inno = []
+        for k in range(len(INNO)):
+            self.pallini_inno.append(quad_ui(self.guida_piano, ((k - (len(INNO) - 1) / 2) * .036, -.3), (.022, .022),
+                                             C(90, 80, 70), z=-.01))
         self.pausa = Entity(parent=ui, enabled=False, z=-3)
         quad_ui(self.pausa, (0, 0), (4, 1.2), C(0, 0, 0, 170))
         testo_ui(self.pausa, "IN PAUSA", (0, .06), 3, ORO, "b", z=-.01)
@@ -1654,7 +1690,7 @@ class Gioco(Entity):
         self.r_sigillo = quad_ui(p, (0, .09), (.24, .24), color.white, self.t_sigillo)
         self.r_frammento = testo_ui(p, "", (0, .09), 2.6, ORO_CHIARO, "b", z=-.01)
         self.r_curiosita_t = testo_ui(p, "Curiosità storica", (0, -.04), 1.3, BORDEAUX, "b")
-        self.r_curiosita = testo_ui(p, "", (0, -.11), 1.2, INCHIOSTRO, "i")
+        self.r_curiosita = testo_ui(p, "", (0, -.07), 1.2, INCHIOSTRO, "i", origin=(0, .5))
         self.b_continua = pulsante(p, "Continua", (0, -.29), (.28, .075), True, self.chiudi_modale)
         self.gruppo_ricompensa = [self.r_sottotitolo, self.r_sigillo, self.r_frammento, self.r_curiosita_t,
                                   self.r_curiosita, self.b_continua]
@@ -1723,6 +1759,7 @@ class Gioco(Entity):
         self.ultimo_secondo = None
         self.mirato = None
         self.t_chiusura = 0.0
+        self.progresso_inno = 0
         if getattr(self, "al_piano", False):
             self.alzati()
         self.al_piano = False
@@ -1794,7 +1831,7 @@ class Gioco(Entity):
             if len(self.risolti) < len(ENIGMI):
                 self.suoni.suona("bloccato")
                 self.scuoti = .5
-                self.mostra_toast("La porta è sbarrata! Risolvi prima tutti gli enigmi (%d/4)." % len(self.risolti),
+                self.mostra_toast("La porta è sbarrata! Risolvi prima tutti gli enigmi (%d/%d)." % (len(self.risolti), N_ENIGMI),
                                   ROSSO_ALLARME)
             else:
                 self.apri_modale(None)
@@ -1808,6 +1845,8 @@ class Gioco(Entity):
         self.mirato = None
         self.piano_hitbox.collider = None          # così il mouse "vede" i singoli tasti
         self.guida_piano.enabled = True
+        self.progresso_inno = 0
+        self._aggiorna_pallini()
         self.toast_t0 = -100
         self._blocca_mouse(False)
         self.suoni.volume_musica(.12)
@@ -1828,6 +1867,34 @@ class Gioco(Entity):
         self.suoni.nota_piano(midi)
         tasto.y = tasto.y0 - .012
         tasto.animate_y(tasto.y0, duration=.18, curve=curve.out_quad)
+        self._controlla_inno(midi)
+
+    def _controlla_inno(self, midi):
+        """Conta le note giuste dell'inno (vale il nome della nota, in qualunque ottava)."""
+        if "inno" in self.risolti:
+            return
+        attesa = INNO[self.progresso_inno][1]
+        if midi % 12 == attesa % 12:
+            self.progresso_inno += 1
+        else:
+            self.progresso_inno = 1 if midi % 12 == INNO[0][1] % 12 else 0
+        self._aggiorna_pallini()
+        if self.progresso_inno == len(INNO):
+            invoke(self._inno_completato, delay=.6)
+
+    def _aggiorna_pallini(self):
+        for k, q in enumerate(self.pallini_inno):
+            q.color = ORO_CHIARO if k < self.progresso_inno else C(90, 80, 70)
+
+    def _inno_completato(self):
+        if self.stato != "gioco" or "inno" in self.risolti:
+            return
+        self.alzati()
+        self.enigma_aperto = ENIGMI_PER_ID["inno"]
+        self.modale.enabled = True
+        self.pannello.x = 0
+        self._blocca_mouse(False)
+        self._risolvi(ENIGMI_PER_ID["inno"])
 
     def apri_modale(self, enigma):
         self.suoni.suona("click")
@@ -1843,7 +1910,7 @@ class Gioco(Entity):
             e.enabled = False
         if enigma is None:
             self.m_titolo.text = "La Porta Uscita"
-            self.m_domanda.text = avvolgi("«Inserisci la parola d'ordine unendo i 4 frammenti di chiave trovati.»", 56)
+            self.m_domanda.text = avvolgi("«Inserisci la parola d'ordine unendo i %d frammenti di chiave trovati.»" % N_ENIGMI, 56)
             self.m_frammenti.text = "  ·  ".join(e["frammento"] for e in ENIGMI)
             self.m_titolo.color = BORDEAUX_SCURO
         else:
@@ -1921,6 +1988,8 @@ class Gioco(Entity):
         self.slot[i].scale = 1.55
         colli = [c for c in radice.children if getattr(c, "id_oggetto", None)]
         cima = colli[0].world_position + Vec3(0, colli[0].world_scale_y / 2 + .15, 0) if colli else radice.world_position
+        if enigma["id"] == "inno":
+            cima += Vec3(0, .32, 0)
         alone = sprite_luminoso(self.mondo, cima, (.5, .5), self.t_alone, C(120, 255, 140, 120))
         sigillo = Entity(parent=self.mondo, model="quad", texture=self.t_sigillo_ok, position=cima, scale=.2,
                          shader=unlit_shader, billboard=True)
@@ -1932,7 +2001,7 @@ class Gioco(Entity):
             invoke(self._sblocca_porta, delay=.8)
             self.mostra_toast("Tutti i frammenti sono tuoi! Le catene della porta sono cadute…")
         else:
-            self.mostra_toast("Frammento «%s» trovato! (%d/4)" % (enigma["frammento"], len(self.risolti)), VERDE_CHIARO)
+            self.mostra_toast("Frammento «%s» trovato! (%d/%d)" % (enigma["frammento"], len(self.risolti), N_ENIGMI), VERDE_CHIARO)
 
     def _sblocca_porta(self):
         if self.stato != "gioco":
@@ -1999,7 +2068,7 @@ class Gioco(Entity):
 
     def sconfitta(self):
         self.stato = "sconfitta"
-        self.s_frammenti.text = "Frammenti della chiave recuperati: %d/4" % len(self.risolti)
+        self.s_frammenti.text = "Frammenti della chiave recuperati: %d/%d" % (len(self.risolti), N_ENIGMI)
         self.s_lista.text = "   ".join(e["frammento"] if e["id"] in self.risolti else "???" for e in ENIGMI)
         self.sconfitta_ui.enabled = True
 
@@ -2142,7 +2211,7 @@ class Gioco(Entity):
         if mirato != self.mirato:
             if self.mirato and self.mirato not in self.risolti:
                 self.interattivi[self.mirato].set_shader_input(
-                    "emissione", Vec3(.12, .1, .03) if (self.mirato == "porta" and len(self.risolti) == 4) else Vec3(0, 0, 0))
+                    "emissione", Vec3(.12, .1, .03) if (self.mirato == "porta" and len(self.risolti) == N_ENIGMI) else Vec3(0, 0, 0))
             if mirato and mirato not in self.risolti:
                 self.interattivi[mirato].set_shader_input("emissione", Vec3(.22, .17, .08))
             self.mirato = mirato
@@ -2152,15 +2221,16 @@ class Gioco(Entity):
             self.suggerimento.text = self.suggerimento2.text = ""
         elif mirato == "porta":
             self.suggerimento.text = "Porta Uscita"
-            self.suggerimento2.text = ("Clic per inserire la parola d'ordine" if len(self.risolti) == 4 else
-                                       "Sbarrata  ·  %d/4 frammenti" % len(self.risolti))
+            self.suggerimento2.text = ("Clic per inserire la parola d'ordine" if len(self.risolti) == N_ENIGMI else
+                                       "Sbarrata  ·  %d/%d frammenti" % (len(self.risolti), N_ENIGMI))
         else:
             e = ENIGMI_PER_ID[mirato]
             self.suggerimento.text = e["nome"]
             self.suggerimento2.text = ("Risolto  ·  frammento «%s»" % e["frammento"] if mirato in self.risolti else
                                        "Clic per esaminare")
             if mirato == "pianoforte":
-                self.suggerimento2.text += "   ·   P: siediti e suona"
+                self.suggerimento2.text += ("   ·   P: suona" if "inno" in self.risolti else
+                                            "   ·   P: siediti e suona lo spartito")
         if mirato is not None:
             self.sugg_sfondo.scale_x = max(self.suggerimento.width, self.suggerimento2.width) + .05
 
@@ -2200,7 +2270,7 @@ class Gioco(Entity):
         for e in (self.pannello_timer, self.etichetta_timer, self.testo_timer, self.barra_tempo):
             e.x = a / 2 - .18
         self.aiuto.x = a / 2 - .02
-        self.sottotitolo.text = "Torino, 4 maggio 1860  ·  Studio segreto della Carboneria  ·  Enigmi risolti: %d/4" % len(self.risolti)
+        self.sottotitolo.text = "Torino, 4 maggio 1860  ·  Studio segreto della Carboneria  ·  Enigmi risolti: %d/%d" % (len(self.risolti), N_ENIGMI)
         rimasto = self.tempo_rimasto()
         self.testo_timer.text = formatta_tempo(rimasto)
         frac = rimasto / TEMPO_TOTALE
@@ -2232,7 +2302,7 @@ class Gioco(Entity):
             dx = math.sin(self.scuoti * 70) * .02 * (self.scuoti / .45)
             self.pannello.x = dx if self.modale.enabled else 0
             if not self.modale.enabled:
-                self.anta.rotation_y = dx * 60 if self.stato == "gioco" and len(self.risolti) < 4 else self.anta.rotation_y
+                self.anta.rotation_y = dx * 60 if self.stato == "gioco" and len(self.risolti) < N_ENIGMI else self.anta.rotation_y
 
 
 def main():
