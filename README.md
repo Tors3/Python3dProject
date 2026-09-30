@@ -1,12 +1,48 @@
 # Il Segreto del Carbonaro
 
-Escape room "punta e clicca" in Python con interfaccia grafica moderna (pygame).
+Escape room ambientata nel Risorgimento, in **due versioni** Python:
+
+| Versione | File | Libreria | Stile |
+|---|---|---|---|
+| **3D** | `il_segreto_del_carbonaro_3d.py` | [Ursina](https://www.ursinaengine.org/) (Panda3D) | Stanza 3D esplorabile in prima persona |
+| **2D** | `il_segreto_del_carbonaro.py` | pygame | Punta e clicca con finestre modali |
 
 > **Torino, 4 maggio 1860.** Sei un corriere della Carboneria, chiuso nello studio segreto di un patriota mentre i gendarmi forzano l'ingresso. Hai **45 minuti** per decifrare i codici nascosti negli oggetti della stanza, ricomporre la parola d'ordine e fuggire prima che Garibaldi salpi da Quarto.
 
-![Stanza](screenshots/2_stanza.png)
+## Versione 3D (consigliata)
 
-## Installazione e avvio
+![Stanza 3D](screenshots_3d/2_stanza.png)
+
+Serve Python 3.10 o superiore.
+
+```bash
+pip install ursina
+python il_segreto_del_carbonaro_3d.py
+```
+
+**Comandi:** WASD / frecce per muoverti · mouse per guardarti intorno · clic sull'oggetto inquadrato dal mirino per esaminarlo · Invio per confermare · Esc per chiudere o mettere in pausa · M per l'audio · F11 per lo schermo intero · R per rigiocare a fine partita.
+
+**Cosa contiene:**
+- Studio ottocentesco esplorabile: carta da parati damascata, boiserie, parquet, travi a vista, tappeto, camino acceso con sciabole incrociate, librerie, lampadario a candele.
+- Oggetti degli enigmi in 3D: pianoforte a coda con lo spartito del *Va, pensiero*, mappa della Spedizione dei Mille con mappamondo, ritratto del Re in cornice dorata con corona, scrivania con lettera, calamaio, penna d'oca e candela.
+- Porta d'uscita sbarrata da catene e lucchetto: quando risolvi tutti gli enigmi le catene cadono. Con la parola d'ordine giusta la porta si apre e la telecamera esce verso la luce.
+- Luci di candela tremolanti calcolate da uno shader GLSL scritto apposta: 6 luci per pixel con riflessi, nebbia e tone mapping.
+- Gli oggetti risolti si illuminano di verde e oro, mostrano un sigillo di ceralacca fluttuante e non si possono più riaprire.
+- L'orologio sul camino segna il tempo che resta.
+- Texture generate con PIL e suoni sintetizzati, tra cui il crepitio del camino: nessun file esterno.
+- Timer di 45:00 in tempo reale. Nell'ultimo minuto diventa rosso e ticchetta. Allo scadere i gendarmi sfondano la porta.
+
+| Intro | Enigma | Mappa |
+|---|---|---|
+| ![](screenshots_3d/1_intro.png) | ![](screenshots_3d/5_enigma.png) | ![](screenshots_3d/4_mappa.png) |
+| **Camino** | **Vittoria** | **Game Over** |
+| ![](screenshots_3d/6_camino.png) | ![](screenshots_3d/7_vittoria.png) | ![](screenshots_3d/8_game_over.png) |
+
+---
+
+## Versione 2D (pygame)
+
+### Installazione e avvio
 
 Serve Python 3.8 o superiore.
 
@@ -20,7 +56,7 @@ python il_segreto_del_carbonaro.py
 Non servono altri file: grafica, font e suoni sono generati interamente via codice.
 I font usati sono quelli di sistema (Georgia, Palatino, Times… con fallback automatico).
 
-## Comandi
+### Comandi
 
 | Tasto / azione | Effetto |
 |---|---|
@@ -31,7 +67,7 @@ I font usati sono quelli di sistema (Georgia, Palatino, Times… con fallback au
 | F11 | Schermo intero / finestra |
 | R | Nuova partita (dalla schermata di vittoria o di game over) |
 
-## Come si gioca
+### Come si gioca
 
 1. Nella stanza ci sono quattro oggetti (**Pianoforte, Mappa, Ritratto, Scrivania**) e la **Porta Uscita**.
 2. Cliccando un oggetto si apre il suo indovinello. La risposta non tiene conto di maiuscole, accenti, punteggiatura e spazi in più.
@@ -42,7 +78,7 @@ I font usati sono quelli di sistema (Georgia, Palatino, Times… con fallback au
 
 Nell'ultimo minuto il timer diventa rosso, pulsa e ticchetta.
 
-## Caratteristiche tecniche
+### Caratteristiche tecniche
 
 - **Un solo file Python** (`il_segreto_del_carbonaro.py`); unica dipendenza: `pygame`.
 - **Grafica procedurale**: carta da parati damascata, boiserie, porta ad arco in pietra, pianoforte con note animate, mappa d'Italia con la rotta dei Mille, ritratto del Re, scrivania con candela tremolante, sigilli di ceralacca, polvere nella luce delle candele, vignettatura.
@@ -51,7 +87,9 @@ Nell'ultimo minuto il timer diventa rosso, pulsa e ticchetta.
 - **Finestra ridimensionabile**: il gioco è disegnato a 1280×800 e scalato mantenendo le proporzioni. Sugli schermi piccoli la finestra si adatta da sola.
 - **Input sicuro**: lunghezza massima, solo caratteri stampabili, confronto normalizzato (accenti, maiuscole, punteggiatura, spazi e congiunzione "e" ignorati).
 
-## Screenshot
+### Screenshot
+
+![Stanza](screenshots/2_stanza.png)
 
 | Introduzione | Enigma |
 |---|---|
