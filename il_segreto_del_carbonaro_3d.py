@@ -1344,11 +1344,13 @@ class Gioco(Entity):
         cassa = Entity(parent=r)
         cassa.set_shader_input("lucido", 1.0)
         blocco(cassa, (0, .86, .45), (1.5, .3, 1.2), col=NERO_LACCA)
+        # coda: lato sinistro (bassi) dritto, lato destro curvo, come in un vero pianoforte a coda
+        blocco(cassa, (-.315, .86, 1.4), (.87, .3, .7), col=NERO_LACCA)
         blocco(cassa, (.12, .855, 1.2), (1.2, .29, 1.2), col=NERO_LACCA, model=cilindro(24))
-        # coperchio sollevato (cerniera sul lato destro, si apre verso sinistra)
-        coperchio = Entity(parent=cassa, position=(.75, 1.02, .5), rotation_z=32)
-        blocco(coperchio, (-.72, 0, .4), (1.45, .03, 1.9), col=C(20, 18, 22))
-        blocco(cassa, (-.42, 1.38, .7), (.025, .74, .025), col=C(30, 26, 28))      # asta di sostegno
+        # coperchio: cerniera sul lato dritto (sinistra), si solleva sul lato curvo (destra)
+        coperchio = Entity(parent=cassa, position=(-.75, 1.02, .5), rotation_z=-32)
+        blocco(coperchio, (.72, 0, .4), (1.45, .03, 1.9), col=C(20, 18, 22))
+        blocco(cassa, (.42, 1.38, .7), (.025, .74, .025), col=C(30, 26, 28))       # asta di sostegno
         # tastiera
         blocco(r, (0, .76, -.28), (1.5, .06, .36), col=NERO_LACCA)
         n = 26
@@ -1385,11 +1387,11 @@ class Gioco(Entity):
         for dx in (-.07, 0, .07):
             blocco(r, (dx, .06, -.06), (.035, .015, .1), col=ORO)
         # candelabro sul pianoforte
-        blocco(r, (-.5, 1.02, -.02), (.12, .02, .12), col=ORO, model=cilindro(10, start=-.5))
-        blocco(r, (-.5, 1.1, -.02), (.025, .16, .025), col=ORO)
-        blocco(r, (-.5, 1.17, -.02), (.26, .02, .02), col=ORO)
+        blocco(r, (.5, 1.02, -.02), (.12, .02, .12), col=ORO, model=cilindro(10, start=-.5))
+        blocco(r, (.5, 1.1, -.02), (.025, .16, .025), col=ORO)
+        blocco(r, (.5, 1.17, -.02), (.26, .02, .02), col=ORO)
         for dx in (-.12, 0, .12):
-            self._candela(r, (-.5 + dx, 1.18, -.02), .12, .9,
+            self._candela(r, (.5 + dx, 1.18, -.02), .12, .9,
                           {"col": Vec3(1.2, .72, .36), "tremolio": .3} if dx == 0 else None)
         # sgabello
         blocco(r, (0, .5, -.85), (.8, .08, .38), col=C(40, 26, 18), texture=self.t_legno)
