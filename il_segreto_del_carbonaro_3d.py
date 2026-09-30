@@ -782,6 +782,89 @@ def crea_shader_stanza():
 # --------------------------------------------------------------------------
 # Audio sintetizzato (WAV generati al volo in una cartella temporanea)
 # --------------------------------------------------------------------------
+def componi_musica(FR=22050):
+    """Brano in loop di leggera suspense (Re minore, 92 bpm, 8 battute)."""
+    bpm = 92
+    beat = 60.0 / bpm
+    L = int(FR * beat * 32)
+    buf = [0.0] * L
+    rnd = random.Random(1860)
+
+    def nota(n):                       # numero MIDI -> Hz
+        return 440.0 * 2 ** ((n - 69) / 12)
+
+    def pizzico(t0, midi, dur, amp, smorz=.996, morbido=2):
+        f = nota(midi)
+        N = max(2, int(FR / f))
+        tab = [rnd.uniform(-1, 1) for _ in range(N)]
+        for _ in range(morbido):       # attacco più morbido (meno brillante)
+            tab = [(tab[i] + tab[i - 1]) * .5 for i in range(N)]
+        s = int(t0 * FR)
+        n = int(dur * FR)
+        coda = int(.03 * FR)
+        for k in range(n):
+            i = k % N
+            v = tab[i]
+            tab[i] = smorz * .5 * (v + tab[(i + 1) % N])
+            g = amp if k < n - coda else amp * (n - k) / coda
+            buf[(s + k) % L] += v * g
+
+    def sinusoide(t0, f, dur, amp, attacco, rilascio, decad=1.0):
+        w = 2 * math.pi * f / FR
+        c2 = 2 * math.cos(w)
+        y1, y2 = math.sin(-w), math.sin(-2 * w)
+        s = int(t0 * FR)
+        n = int(dur * FR)
+        na, nr = max(1, int(attacco * FR)), max(1, int(rilascio * FR))
+        e = 1.0
+        for k in range(n):
+            y0 = c2 * y1 - y2
+            y2, y1 = y1, y0
+            if k < na:
+                g = k / na
+            elif k > n - nr:
+                g = (n - k) / nr
+            else:
+                g = 1.0
+            e *= decad
+            buf[(s + k) % L] += y0 * amp * g * e
+
+    # i - VI - iv - V  (Rem, Sib, Solm, La7): due battute ciascuno
+    accordi = [(50, [62, 65, 69]), (46, [58, 62, 65]), (43, [55, 58, 62]), (45, [57, 61, 64, 67])]
+    for a, (basso, voci) in enumerate(accordi):
+        t_acc = a * 8 * beat
+        # tappeto d'archi morbido
+        for v in voci[:3]:
+            sinusoide(t_acc, nota(v - 12), 8 * beat, .035, 1.2, 1.4)
+            sinusoide(t_acc, nota(v - 12) * 2.003, 8 * beat, .012, 1.6, 1.4)
+        # basso pizzicato: 1° e 3° tempo
+        for b in range(8):
+            if b % 2 == 0:
+                pizzico(t_acc + b * beat, basso - 12 if b % 4 == 0 else basso - 5, beat * 1.6, .42, .994)
+        # ostinato di pizzicati in crome
+        schema = [0, 1, 2, 1, 0, 1, 2, 1]
+        for b in range(16):
+            v = voci[schema[b % 8]] + (12 if b % 8 == 2 else 0)
+            accento = .2 if b % 2 == 0 else .13
+            pizzico(t_acc + b * beat / 2, v, beat * .9, accento, .990, 3)
+    # carillon: brevi frasi nelle battute pari
+    frasi = [(1, [(0, 81), (1.5, 77), (2, 76), (3, 74)]),
+             (3, [(0, 86), (1, 84), (2, 82), (3, 81)]),
+             (5, [(0, 79), (1, 82), (2, 81), (3, 79)]),
+             (7, [(0, 76), (1.5, 73), (2.5, 69)])]
+    for battuta, note in frasi:
+        for (b, m) in note:
+            t = (battuta * 4 + b) * beat
+            sinusoide(t, nota(m), 1.6, .07, .004, .3, .99985)
+            sinusoide(t, nota(m) * 4.01, .5, .012, .002, .2, .9997)
+    # tic-tac leggerissimo sui tempi
+    for b in range(32):
+        f = 2400 if b % 2 == 0 else 1900
+        sinusoide(b * beat, f, .03, .025, .001, .02, .9993)
+    picco = max(abs(v) for v in buf) or 1.0
+    return [v * .9 / picco for v in buf]
+
+
 class Suoni:
     FREQ = 22050
 
@@ -795,12 +878,14 @@ class Suoni:
             print("Audio non disponibile:", ex)
             self.sfx = {}
 
-    def _scrivi(self, nome, durata, f, volume=0.55):
-        n = int(self.FREQ * durata)
+    def _scrivi(self, nome, durata, f, volume=0.55, loop=False):
+        """f è una funzione del tempo oppure direttamente la lista dei campioni."""
+        campioni = f if isinstance(f, list) else [f(i / self.FREQ) for i in range(int(self.FREQ * durata))]
+        n = len(campioni)
         dati = array("h")
-        for i in range(n):
-            v = max(-1.0, min(1.0, f(i / self.FREQ))) * volume
-            fade = min(1.0, (n - i) / (self.FREQ * 0.01))
+        for i, v in enumerate(campioni):
+            v = max(-1.0, min(1.0, v)) * volume
+            fade = 1.0 if loop else min(1.0, (n - i) / (self.FREQ * 0.01))
             dati.append(int(v * fade * 32767))
         percorso = os.path.join(self.cartella, nome + ".wav")
         with wave.open(percorso, "wb") as w:
@@ -847,31 +932,51 @@ class Suoni:
             (rnd.random() * 2 - 1) * 0.9 * math.exp(-t * 7) + 0.5 * math.sin(tau * (70 - 18 * t) * t) * math.exp(-t * 1.5)
             + (0.25 * math.sin(tau * 233 * (t - .5)) * math.exp(-(t - .5) * 3) if t > .5 else 0)
             + (0.25 * math.sin(tau * 220 * (t - .9)) * math.exp(-(t - .9) * 2) if t > .9 else 0)))
-        crepitii = sorted(rnd.uniform(0, 4) for _ in range(40))
-
-        def fuoco(t):
-            v = (rnd.random() * 2 - 1) * 0.05
-            for c in crepitii:
-                if 0 <= t - c < 0.03:
-                    v += (rnd.random() * 2 - 1) * 0.6 * (1 - (t - c) / 0.03)
-            return v
-        amb = self._scrivi("fuoco", 4.0, fuoco, volume=0.35)
+        # camino: brusio morbido (rumore filtrato) e pochi scoppiettii attutiti
+        n = int(self.FREQ * 6)
+        fuoco = [0.0] * n
+        lp = 0.0
+        for i in range(n):
+            lp += .02 * (rnd.uniform(-1, 1) - lp)
+            fuoco[i] = lp
+        for _ in range(26):
+            inizio = rnd.randrange(n)
+            durata = rnd.randint(250, 700)
+            amp = rnd.uniform(.08, .22)
+            f = 0.0
+            for k in range(durata):
+                f += .3 * (rnd.uniform(-1, 1) - f)
+                fuoco[(inizio + k) % n] += f * amp * math.exp(-k / (durata * .25))
+        picco = max(abs(v) for v in fuoco) or 1.0
+        amb = self._scrivi("fuoco", 0, [v * .5 / picco for v in fuoco], volume=1.0, loop=True)
         amb.setLoop(True)
-        amb.setVolume(0.45)
+        amb.setVolume(0.1)
+        # musica di sottofondo: leggera suspense, in loop
+        mus = self._scrivi("musica", 0, componi_musica(self.FREQ), volume=1.0, loop=True)
+        mus.setLoop(True)
+        mus.setVolume(0.38)
 
     def suona(self, nome):
         if self.attivo and nome in self.sfx:
             self.sfx[nome].play()
 
-    def ambiente(self, acceso):
+    def ambiente(self, acceso, musica=True):
+        """Accende/spegne il camino e la musica di sottofondo."""
+        for nome, on in (("fuoco", acceso), ("musica", acceso and musica)):
+            s = self.sfx.get(nome)
+            if s is None:
+                continue
+            if on and self.attivo:
+                if s.status() != s.PLAYING:
+                    s.play()
+            else:
+                s.stop()
+
+    def volume_camino(self, distanza):
+        """Il fuoco si sente bene solo quando ci si avvicina al camino."""
         s = self.sfx.get("fuoco")
-        if s is None:
-            return
-        if acceso and self.attivo:
-            if s.status() != s.PLAYING:
-                s.play()
-        else:
-            s.stop()
+        if s is not None:
+            s.setVolume(.04 + .22 * max(0.0, min(1.0, 1 - (distanza - 1.0) / 5.0)))
 
     def pulisci(self):
         shutil.rmtree(self.cartella, ignore_errors=True)
@@ -1711,6 +1816,7 @@ class Gioco(Entity):
         self.t_evento = time.monotonic()
         self._blocca_mouse(False)
         self.hud.enabled = False
+        self.suoni.ambiente(True, musica=False)
         self.suoni.suona("porta")
         self.anta.animate_rotation_y(105, duration=2.2, curve=curve.in_out_sine)
         for i in self.indice_luce_porta:
@@ -1743,6 +1849,7 @@ class Gioco(Entity):
         self.campo.attivo = False
         self.hud.enabled = False
         self._blocca_mouse(False)
+        self.suoni.ambiente(True, musica=False)
         self.suoni.suona("sconfitta")
         self.catene.enabled = False
         self.anta.animate_rotation_y(100, duration=.25, curve=curve.out_expo)
@@ -1926,6 +2033,7 @@ class Gioco(Entity):
         self.lancette[0].rotation_z = -(rimasto / 3600) * 360
         self.lancette[1].rotation_z = -(rimasto % 60) * 6
         self.globo.rotation_y += dt * 12
+        self.suoni.volume_camino((camera.world_position - Vec3(0, 1, -3.6)).length())
         for k, e in enumerate(self.etichette_risolte):
             e.y = e.y0 + .04 * math.sin(t * 2 + k // 2)
 
