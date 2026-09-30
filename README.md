@@ -1,0 +1,73 @@
+# Il Segreto del Carbonaro
+
+Escape room "punta e clicca" in Python con interfaccia grafica moderna (pygame).
+
+> **Torino, 4 maggio 1860.** Sei un corriere della Carboneria, chiuso nello studio segreto di un patriota mentre i gendarmi forzano l'ingresso. Hai **45 minuti** per decifrare i codici nascosti negli oggetti della stanza, ricomporre la parola d'ordine e fuggire prima che Garibaldi salpi da Quarto.
+
+![Stanza](screenshots/2_stanza.png)
+
+## Installazione e avvio
+
+Serve Python 3.8 o superiore.
+
+```bash
+pip install pygame
+python il_segreto_del_carbonaro.py
+```
+
+(su macOS/Linux potrebbe essere `pip3` / `python3`).
+
+Non servono altri file: grafica, font e suoni sono generati interamente via codice.
+I font usati sono quelli di sistema (Georgia, Palatino, Times… con fallback automatico).
+
+## Comandi
+
+| Tasto / azione | Effetto |
+|---|---|
+| Clic su un oggetto | Apre l'enigma |
+| Invio | Conferma la risposta |
+| Esc | Chiude la finestra dell'enigma (a fine partita esce dal gioco) |
+| M | Audio on/off |
+| F11 | Schermo intero / finestra |
+| R | Nuova partita (dalla schermata di vittoria o di game over) |
+
+## Come si gioca
+
+1. Nella stanza ci sono quattro oggetti (**Pianoforte, Mappa, Ritratto, Scrivania**) e la **Porta Uscita**.
+2. Cliccando un oggetto si apre il suo indovinello. La risposta non tiene conto di maiuscole, accenti, punteggiatura e spazi in più.
+3. Ogni risposta esatta sblocca un **frammento della chiave** e una **curiosità storica**. L'oggetto risolto diventa verde e oro e non è più cliccabile.
+4. La porta resta sbarrata (con catene e lucchetto) finché non risolvi tutti e quattro gli enigmi.
+5. Poi clicca la porta e inserisci la parola d'ordine unendo i frammenti.
+6. Se il timer arriva a **00:00** prima della fuga, i gendarmi sfondano la porta: **Game Over**.
+
+Nell'ultimo minuto il timer diventa rosso, pulsa e ticchetta.
+
+## Caratteristiche tecniche
+
+- **Un solo file Python** (`il_segreto_del_carbonaro.py`); unica dipendenza: `pygame`.
+- **Grafica procedurale**: carta da parati damascata, boiserie, porta ad arco in pietra, pianoforte con note animate, mappa d'Italia con la rotta dei Mille, ritratto del Re, scrivania con candela tremolante, sigilli di ceralacca, polvere nella luce delle candele, vignettatura.
+- **Audio sintetizzato** al volo (click, arpeggio di vittoria, errore, catene, ticchettio, fanfara, porta sfondata). Se il computer non ha una scheda audio il gioco funziona lo stesso, in silenzio.
+- **Timer in tempo reale** basato sull'orologio di sistema, non sui frame: resta preciso anche se il PC rallenta. Si ferma alla vittoria.
+- **Finestra ridimensionabile**: il gioco è disegnato a 1280×800 e scalato mantenendo le proporzioni. Sugli schermi piccoli la finestra si adatta da sola.
+- **Input sicuro**: lunghezza massima, solo caratteri stampabili, confronto normalizzato (accenti, maiuscole, punteggiatura, spazi e congiunzione "e" ignorati).
+
+## Screenshot
+
+| Introduzione | Enigma |
+|---|---|
+| ![Intro](screenshots/1_intro.png) | ![Enigma](screenshots/3_enigma.png) |
+| **Vittoria** | **Game Over** |
+| ![Vittoria](screenshots/4_vittoria.png) | ![Game Over](screenshots/5_game_over.png) |
+
+<details>
+<summary>Soluzioni (spoiler!)</summary>
+
+| Oggetto | Risposta | Frammento |
+|---|---|---|
+| Pianoforte | VERDI | OBBE |
+| Mappa | 1089 | DI |
+| Ritratto | 2 | S |
+| Scrivania | BLU BIANCO ROSSO | CO |
+| Porta Uscita | OBBEDISCO | — |
+
+</details>
