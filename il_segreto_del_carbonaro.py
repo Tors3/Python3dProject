@@ -30,7 +30,7 @@ import pygame
 # --------------------------------------------------------------------------
 W, H = 1280, 800                 # risoluzione logica (scalata alla finestra)
 FPS = 60
-TEMPO_TOTALE = 45 * 60           # 45:00
+TEMPO_TOTALE = 15 * 60           # 15:00
 MAX_INPUT = 32
 
 # Palette "Dark Academia / Risorgimento"
@@ -108,6 +108,7 @@ ENIGMI = [
                     "contro gli austriaci. Quali sono i colori di quella "
                     "bandiera? (es: verde bianco rosso)"),
         "soluzioni": ["blu bianco rosso", "bleu blanc rouge"],
+        "ordine_libero": True,          # i tre colori valgono in qualunque ordine
         "frammento": "CO",
         "curiosita": ("Cavour parlava un pessimo italiano e i suoi discorsi "
                       "andavano corretti in Parlamento."),
@@ -123,7 +124,7 @@ TRAMA = ("4 maggio 1860. Sei un corriere della Carboneria, nascosto nello "
          "l'ingresso.\n"
          "Il patriota ha nascosto la parola d'ordine che apre l'uscita "
          "segreta in quattro frammenti, custoditi dagli oggetti della stanza. "
-         "Hai 45 minuti per decifrare i codici, ricomporre la chiave e fuggire.")
+         "Hai 15 minuti per decifrare i codici, ricomporre la chiave e fuggire.")
 
 CURIOSITA_FINALE = ("Sei anni dopo, il 9 agosto 1866, durante la Terza guerra "
                     "d'indipendenza, Garibaldi aveva appena battuto gli "
@@ -149,7 +150,11 @@ def normalizza(testo):
 
 def risposta_corretta(enigma, risposta):
     r = normalizza(risposta)
-    return bool(r) and r in {normalizza(s) for s in enigma["soluzioni"]}
+    if not r:
+        return False
+    if enigma.get("ordine_libero"):
+        return sorted(r.split()) in [sorted(normalizza(s).split()) for s in enigma["soluzioni"]]
+    return r in {normalizza(s) for s in enigma["soluzioni"]}
 
 
 def formatta_tempo(secondi):

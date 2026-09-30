@@ -37,7 +37,7 @@ from PIL import Image, ImageDraw, ImageFilter, ImageFont
 # --------------------------------------------------------------------------
 # Configurazione
 # --------------------------------------------------------------------------
-TEMPO_TOTALE = 45 * 60          # 45:00
+TEMPO_TOTALE = 15 * 60          # 15:00
 DISTANZA_INTERAZIONE = 3.2      # metri
 ALTEZZA_OCCHI = 1.62
 VELOCITA = 2.4
@@ -107,6 +107,7 @@ ENIGMI = [
                     "contro gli austriaci. Quali sono i colori di quella "
                     "bandiera? (es: verde bianco rosso)"),
         "soluzioni": ["blu bianco rosso", "bleu blanc rouge"],
+        "ordine_libero": True,          # i tre colori valgono in qualunque ordine
         "frammento": "CO",
         "curiosita": ("Cavour parlava un pessimo italiano e i suoi discorsi "
                       "andavano corretti in Parlamento."),
@@ -124,7 +125,7 @@ TRAMA = ("4 maggio 1860. Sei un corriere della Carboneria, nascosto nello studio
          "Garibaldi prima che salpi da Quarto. Ma qualcuno ha parlato: i gendarmi "
          "hanno circondato il palazzo e stanno forzando l'ingresso.\n"
          "Il patriota ha nascosto la parola d'ordine dell'uscita segreta in quattro "
-         "frammenti, custoditi dagli oggetti della stanza. Hai 45 minuti per "
+         "frammenti, custoditi dagli oggetti della stanza. Hai 15 minuti per "
          "decifrare i codici, ricomporre la chiave e fuggire.")
 
 CURIOSITA_FINALE = ("Sei anni dopo, il 9 agosto 1866, durante la Terza guerra "
@@ -150,7 +151,11 @@ def normalizza(testo):
 
 def risposta_corretta(enigma, risposta):
     r = normalizza(risposta)
-    return bool(r) and r in {normalizza(s) for s in enigma["soluzioni"]}
+    if not r:
+        return False
+    if enigma.get("ordine_libero"):
+        return sorted(r.split()) in [sorted(normalizza(s).split()) for s in enigma["soluzioni"]]
+    return r in {normalizza(s) for s in enigma["soluzioni"]}
 
 
 def formatta_tempo(secondi):
@@ -1189,8 +1194,13 @@ class CampoTesto(Entity):
     def _aggiorna(self):
         self.testo.text = self.valore
         self.segnaposto.enabled = not self.valore
-        w = self.testo.width if self.valore else 0
-        self.cursore.x = -self.larghezza / 2 + .022 + w
+        # Text.width non tiene conto della scala dell'entità: la applichiamo noi.
+        # Se la risposta è lunga, il testo si rimpicciolisce per restare nella casella.
+        larghezza_base = self.testo.width if self.valore else 0
+        spazio = self.larghezza - .05
+        scala = 1.45 if larghezza_base * 1.45 <= spazio else spazio / larghezza_base
+        self.testo.scale = scala
+        self.cursore.x = -self.larghezza / 2 + .024 + larghezza_base * scala
 
     def text_input(self, key):
         if self.attivo and len(self.valore) < MAX_INPUT and key.isprintable():
@@ -1624,7 +1634,7 @@ class Gioco(Entity):
         self.sottotitolo = testo_ui(self.hud, "", (0, .42), .95, PERGAMENA, "i", (-.5, 0))
         self.pannello_timer = quad_ui(self.hud, (0, .43), (.32, .12), color.white, self.t_pannello)
         self.etichetta_timer = testo_ui(self.hud, "I GENDARMI ENTRERANNO TRA", (0, .469), .52, PERGAMENA_SCURA, "b")
-        self.testo_timer = testo_ui(self.hud, "45:00", (0, .42), 2.9, ORO_CHIARO, "b", z=-.01)
+        self.testo_timer = testo_ui(self.hud, formatta_tempo(TEMPO_TOTALE), (0, .42), 2.9, ORO_CHIARO, "b", z=-.01)
         self.barra_tempo = quad_ui(self.hud, (0, .364), (.3, .008), ORO)
         # frammenti
         quad_ui(self.hud, (0, -.425), (.98, .15), color.white, self.t_pergamena_larga)
@@ -1819,7 +1829,7 @@ class Gioco(Entity):
     def mostra_toast(self, msg, col=ORO_CHIARO):
         self.toast.text = msg
         self.toast.color = col
-        self.toast_sfondo.scale_x = self.toast.width + .06
+        self.toast_sfondo.scale_x = self.toast.width * self.toast.scale_x + .06
         self.toast_t0 = time.monotonic()
 
     # ------------------------------------------------------------------ interazione
@@ -2232,7 +2242,8 @@ class Gioco(Entity):
                 self.suggerimento2.text += ("   ·   P: suona" if "inno" in self.risolti else
                                             "   ·   P: siediti e suona lo spartito")
         if mirato is not None:
-            self.sugg_sfondo.scale_x = max(self.suggerimento.width, self.suggerimento2.width) + .05
+            self.sugg_sfondo.scale_x = max(self.suggerimento.width * self.suggerimento.scale_x,
+                                           self.suggerimento2.width * self.suggerimento2.scale_x) + .05
 
     def _aggiorna_luci(self, t):
         for i, l in enumerate(self.luci):

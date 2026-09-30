@@ -7,7 +7,7 @@ Escape room ambientata nel Risorgimento, in **due versioni** Python:
 | **3D** | `il_segreto_del_carbonaro_3d.py` | [Ursina](https://www.ursinaengine.org/) (Panda3D) | Stanza 3D esplorabile in prima persona |
 | **2D** | `il_segreto_del_carbonaro.py` | pygame | Punta e clicca con finestre modali |
 
-> **Torino, 4 maggio 1860.** Sei un corriere della Carboneria, chiuso nello studio segreto di un patriota mentre i gendarmi forzano l'ingresso. Hai **45 minuti** per decifrare i codici nascosti negli oggetti della stanza, ricomporre la parola d'ordine e fuggire prima che Garibaldi salpi da Quarto.
+> **Torino, 4 maggio 1860.** Sei un corriere della Carboneria, chiuso nello studio segreto di un patriota mentre i gendarmi forzano l'ingresso. Hai **15 minuti** per decifrare i codici nascosti negli oggetti della stanza, ricomporre la parola d'ordine e fuggire prima che Garibaldi salpi da Quarto.
 
 ## Versione 3D (consigliata)
 
@@ -34,7 +34,7 @@ python il_segreto_del_carbonaro_3d.py
 - Musica di sottofondo di leggera suspense, composta e sintetizzata dal codice: loop in Re minore con basso pizzicato, arpeggi, archi morbidi, carillon e tic-tac, con un filtro che rende il suono più tondo.
 - Il crepitio del camino è morbido e si sente di più solo quando ti avvicini al fuoco.
 - Texture generate con PIL e suoni sintetizzati: nessun file esterno. Con M spegni musica ed effetti.
-- Timer di 45:00 in tempo reale. Nell'ultimo minuto diventa rosso e ticchetta. Allo scadere i gendarmi sfondano la porta.
+- Timer di 15:00 in tempo reale. Nell'ultimo minuto diventa rosso e ticchetta. Allo scadere i gendarmi sfondano la porta.
 
 | Intro | Enigma | Mappa |
 |---|---|---|
@@ -106,12 +106,13 @@ Nell'ultimo minuto il timer diventa rosso, pulsa e ticchetta.
 <details>
 <summary>Soluzioni (spoiler!)</summary>
 
-| Oggetto | Risposta | Frammento |
-|---|---|---|
-| Pianoforte | VERDI | OBBE |
-| Mappa | 1089 | DI |
-| Ritratto | 2 | S |
-| Scrivania | BLU BIANCO ROSSO | CO |
-| Porta Uscita | OBBEDISCO | — |
+| Oggetto | Risposta | Frammento 2D | Frammento 3D |
+|---|---|---|---|
+| Pianoforte | VERDI | OBBE | OB |
+| Inno (solo 3D) | suonare Re Re Mi Re Si Si Do Si Si Re Do Si La Si La Sol | — | BE |
+| Mappa | 1089 | DI | DI |
+| Ritratto | 2 | S | S |
+| Scrivania | BLU BIANCO ROSSO (in qualsiasi ordine) | CO | CO |
+| Porta Uscita | OBBEDISCO | — | — |
 
 </details>
