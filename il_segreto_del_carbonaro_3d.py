@@ -43,6 +43,9 @@ ALTEZZA_OCCHI = 1.62
 VELOCITA = 2.4
 SENSIBILITA_MOUSE = 40
 MAX_INPUT = 32
+# tastiera del computer -> note (Do4 = 60): riga centrale tasti bianchi, riga sopra tasti neri
+TASTI_PIANO = {"a": 60, "w": 61, "s": 62, "e": 63, "d": 64, "f": 65, "t": 66, "g": 67, "y": 68,
+               "h": 69, "u": 70, "j": 71, "k": 72, "o": 73, "l": 74, "p": 75}
 N_LUCI = 6
 
 # --------------------------------------------------------------------------
@@ -840,13 +843,13 @@ def componi_musica(FR=22050):
         # basso pizzicato: 1° e 3° tempo
         for b in range(8):
             if b % 2 == 0:
-                pizzico(t_acc + b * beat, basso - 12 if b % 4 == 0 else basso - 5, beat * 1.6, .42, .994)
+                pizzico(t_acc + b * beat, basso - 12 if b % 4 == 0 else basso - 5, beat * 1.6, .42, .993, 3)
         # ostinato di pizzicati in crome
         schema = [0, 1, 2, 1, 0, 1, 2, 1]
         for b in range(16):
             v = voci[schema[b % 8]] + (12 if b % 8 == 2 else 0)
             accento = .2 if b % 2 == 0 else .13
-            pizzico(t_acc + b * beat / 2, v, beat * .9, accento, .990, 3)
+            pizzico(t_acc + b * beat / 2, v, beat * .9, accento, .989, 5)
     # carillon: brevi frasi nelle battute pari
     frasi = [(1, [(0, 81), (1.5, 77), (2, 76), (3, 74)]),
              (3, [(0, 86), (1, 84), (2, 82), (3, 81)]),
@@ -856,13 +859,46 @@ def componi_musica(FR=22050):
         for (b, m) in note:
             t = (battuta * 4 + b) * beat
             sinusoide(t, nota(m), 1.6, .07, .004, .3, .99985)
-            sinusoide(t, nota(m) * 4.01, .5, .012, .002, .2, .9997)
+            sinusoide(t, nota(m) * 4.01, .5, .005, .004, .2, .9997)
     # tic-tac leggerissimo sui tempi
     for b in range(32):
-        f = 2400 if b % 2 == 0 else 1900
-        sinusoide(b * beat, f, .03, .025, .001, .02, .9993)
+        f = 1500 if b % 2 == 0 else 1200
+        sinusoide(b * beat, f, .03, .014, .002, .02, .9993)
+    # leggero filtro passa-basso sul mix: suono più tondo (a giro sul loop, senza stacchi)
+    y = 0.0
+    for giro in range(2):
+        for i in range(L):
+            y += .6 * (buf[i] - y)
+            if giro:
+                buf[i] = y
     picco = max(abs(v) for v in buf) or 1.0
     return [v * .9 / picco for v in buf]
+
+
+def tono_pianoforte(midi, FR=22050, durata=1.8):
+    """Nota di pianoforte: armoniche leggermente inarmoniche che si spengono a velocità diverse."""
+    f = 440.0 * 2 ** ((midi - 69) / 12)
+    n = int(FR * durata)
+    out = [0.0] * n
+    for k, amp in enumerate((1.0, .5, .28, .16, .08), start=1):
+        fk = k * f * math.sqrt(1 + .0003 * k * k)
+        if fk > FR * .45:
+            break
+        w = 2 * math.pi * fk / FR
+        c2 = 2 * math.cos(w)
+        y1, y2 = math.sin(-w), math.sin(-2 * w)
+        e = amp
+        smorz = math.exp(-(1.3 + .9 * k) * (1 + (midi - 60) / 48) / FR)
+        for i in range(n):
+            y0 = c2 * y1 - y2
+            y2, y1 = y1, y0
+            e *= smorz
+            out[i] += y0 * e
+    attacco = int(.004 * FR)
+    for i in range(attacco):
+        out[i] *= i / attacco
+    picco = max(abs(v) for v in out) or 1.0
+    return [v * .8 / picco for v in out]
 
 
 class Suoni:
@@ -951,6 +987,13 @@ class Suoni:
         amb = self._scrivi("fuoco", 0, [v * .5 / picco for v in fuoco], volume=1.0, loop=True)
         amb.setLoop(True)
         amb.setVolume(0.1)
+        # pianoforte suonabile: quattro campioni (Do3..Do6) trasposti con la velocità
+        self.voci_piano = {}
+        for base_midi in (48, 60, 72, 84):
+            self._scrivi("piano_%d" % base_midi, 0, tono_pianoforte(base_midi, self.FREQ), volume=.9)
+            percorso = os.path.join(self.cartella, "piano_%d.wav" % base_midi)
+            self.voci_piano[base_midi] = [loader.loadSfx(Filename.fromOsSpecific(percorso)) for _ in range(3)]
+        self.turno_voce = 0
         # musica di sottofondo: leggera suspense, in loop
         mus = self._scrivi("musica", 0, componi_musica(self.FREQ), volume=1.0, loop=True)
         mus.setLoop(True)
@@ -972,6 +1015,22 @@ class Suoni:
             else:
                 s.stop()
 
+    def nota_piano(self, midi):
+        if not self.attivo or not getattr(self, "voci_piano", None):
+            return
+        base_midi = max(48, min(84, 48 + 12 * ((midi - 48) // 12)))
+        voci = self.voci_piano[base_midi]
+        self.turno_voce = (self.turno_voce + 1) % len(voci)
+        v = voci[self.turno_voce]
+        v.stop()
+        v.setPlayRate(2 ** ((midi - base_midi) / 12))
+        v.play()
+
+    def volume_musica(self, volume):
+        s = self.sfx.get("musica")
+        if s is not None:
+            s.setVolume(volume)
+
     def volume_camino(self, distanza):
         """Il fuoco si sente bene solo quando ci si avvicina al camino."""
         s = self.sfx.get("fuoco")
@@ -985,6 +1044,27 @@ class Suoni:
 # --------------------------------------------------------------------------
 # Aiuti per costruire la scena
 # --------------------------------------------------------------------------
+def cilindro(risoluzione=12, start=-.5, direction=(0, 1, 0)):
+    """Cilindro di Ursina con le normali (senza, l'illuminazione risulta piatta)."""
+    m = Cylinder(risoluzione, start=start, direction=direction)
+    asse = Vec3(*direction).normalized()
+    v = list(m.vertices)
+    normali = []
+    for i in range(0, len(v) - 2, 3):              # la mesh è una lista di triangoli
+        a, b, c = Vec3(*v[i]), Vec3(*v[i + 1]), Vec3(*v[i + 2])
+        fn = (b - a).cross(c - a)
+        fn = fn.normalized() if fn.length() > 1e-9 else asse
+        if abs(fn.dot(asse)) > .9:                  # tappi: normale piatta
+            normali += [fn, fn, fn]
+        else:                                       # fianco: normale radiale (superficie liscia)
+            for p in (a, b, c):
+                r = p - asse * p.dot(asse)
+                normali.append(r.normalized() if r.length() > 1e-9 else fn)
+    m.normals = normali
+    m.generate()
+    return m
+
+
 def blocco(parent, pos, scala, col=None, texture=None, rot=(0, 0, 0), tex_scale=None, model="cube"):
     e = Entity(parent=parent, model=model, position=pos, scale=scala, rotation=rot)
     if texture is not None:
@@ -1191,7 +1271,7 @@ class Gioco(Entity):
         self._costruisci_lampadario()
 
     def _candela(self, parent, pos, altezza=.16, scala_fiamma=1.0, luce=None):
-        blocco(parent, (pos[0], pos[1] + altezza / 2, pos[2]), (.035, altezza, .035), col=CERA, model=Cylinder(10, start=-.5))
+        blocco(parent, (pos[0], pos[1] + altezza / 2, pos[2]), (.035, altezza, .035), col=CERA, model=cilindro(10, start=-.5))
         punta = (pos[0], pos[1] + altezza + .03 * scala_fiamma, pos[2])
         f = sprite_luminoso(parent, punta, (.035 * scala_fiamma, .07 * scala_fiamma), self.t_fiamma, C(255, 230, 180))
         a = sprite_luminoso(parent, punta, (.35 * scala_fiamma, .35 * scala_fiamma), self.t_alone, C(255, 170, 80, 110))
@@ -1251,7 +1331,7 @@ class Gioco(Entity):
         for x in (-1.45, 1.45):
             blocco(r, (x, 1.95, -.06), (.08, .2, .06), col=ORO_SCURO)
             blocco(r, (x, 2.0, -.16), (.03, .03, .2), col=ORO_SCURO)
-            blocco(r, (x, 2.02, -.25), (.1, .02, .1), col=ORO_SCURO, model=Cylinder(10))
+            blocco(r, (x, 2.02, -.25), (.1, .02, .1), col=ORO_SCURO, model=cilindro(10))
             self._candela(r, (x, 2.03, -.25), .14, 1.0,
                           {"col": Vec3(1.3, .78, .4), "tremolio": .25})
         self.interattivi["porta"] = r
@@ -1264,31 +1344,48 @@ class Gioco(Entity):
         cassa = Entity(parent=r)
         cassa.set_shader_input("lucido", 1.0)
         blocco(cassa, (0, .86, .45), (1.5, .3, 1.2), col=NERO_LACCA)
-        blocco(cassa, (.12, .86, 1.2), (1.2, .3, 1.2), col=NERO_LACCA, model=Cylinder(24, start=-.5))
-        # coperchio aperto
-        coperchio = Entity(parent=cassa, position=(.75, 1.02, .5), rotation_z=-32)
+        blocco(cassa, (.12, .855, 1.2), (1.2, .29, 1.2), col=NERO_LACCA, model=cilindro(24))
+        # coperchio sollevato (cerniera sul lato destro, si apre verso sinistra)
+        coperchio = Entity(parent=cassa, position=(.75, 1.02, .5), rotation_z=32)
         blocco(coperchio, (-.72, 0, .4), (1.45, .03, 1.9), col=C(20, 18, 22))
-        blocco(cassa, (.45, 1.25, .6), (.025, .5, .025), col=C(20, 18, 22), rot=(0, 0, -20))
+        blocco(cassa, (-.42, 1.38, .7), (.025, .74, .025), col=C(30, 26, 28))      # asta di sostegno
         # tastiera
         blocco(r, (0, .76, -.28), (1.5, .06, .36), col=NERO_LACCA)
         n = 26
+        self.tasti = {}
+        scala_do = [0, 2, 4, 5, 7, 9, 11]
         for i in range(n):
             x = -.68 + i * (1.36 / n)
-            blocco(r, (x + .026, .8, -.36), (.049, .025, .2), col=C(236, 230, 214))
+            midi = 48 + 12 * (i // 7) + scala_do[i % 7]           # il tasto 0 è il Do3
+            t = blocco(r, (x + .026, .8, -.36), (.049, .025, .2), col=C(236, 230, 214))
+            t.collider = "box"
+            self.tasti[midi] = t
             if i % 7 not in (2, 6) and i < n - 1:
-                blocco(r, (x + .052, .82, -.32), (.028, .03, .12), col=C(10, 8, 8))
+                t = blocco(r, (x + .052, .82, -.32), (.028, .03, .12), col=C(10, 8, 8))
+                t.collider = "box"
+                self.tasti[midi + 1] = t
+        for midi, t in self.tasti.items():
+            t.nota = midi
+            t.y0 = t.y
+        # punti di vista per quando ci si siede a suonare
+        self.piano_occhi = Entity(parent=r, position=(0, 1.5, -1.3))
+        self.piano_mira = Entity(parent=r, position=(0, .86, -.1))
         blocco(r, (0, .86, -.14), (1.5, .14, .06), col=NERO_LACCA)
         # leggio con spartito
         blocco(r, (0, 1.12, -.07), (.62, .4, .02), col=C(20, 16, 18), rot=(-15, 0, 0))
         blocco(r, (0, 1.13, -.085), (.56, .36, .005), texture=self.t_spartito, rot=(-15, 0, 0))
         # gambe e pedali
         for (x, z) in ((-.65, -.1), (.65, -.1), (.1, 1.6)):
-            blocco(r, (x, .37, z), (.1, .74, .1), col=NERO_LACCA, model=Cylinder(10, start=-.5))
-            blocco(r, (x, .02, z), (.12, .04, .12), col=ORO_SCURO, model=Cylinder(10, start=-.5))
-        blocco(r, (0, .08, -.05), (.26, .14, .06), col=NERO_LACCA)
-        blocco(r, (0, .04, -.12), (.2, .02, .1), col=ORO_SCURO)
+            blocco(r, (x, .37, z), (.1, .74, .1), col=NERO_LACCA, model=cilindro(10, start=-.5))
+            blocco(r, (x, .02, z), (.12, .04, .12), col=ORO_SCURO, model=cilindro(10, start=-.5))
+        # lira dei pedali
+        for dx in (-.08, .08):
+            blocco(r, (dx, .4, .02), (.03, .62, .03), col=NERO_LACCA)
+        blocco(r, (0, .1, .02), (.26, .1, .1), col=NERO_LACCA)
+        for dx in (-.07, 0, .07):
+            blocco(r, (dx, .06, -.06), (.035, .015, .1), col=ORO)
         # candelabro sul pianoforte
-        blocco(r, (-.5, 1.02, -.02), (.12, .02, .12), col=ORO, model=Cylinder(10, start=-.5))
+        blocco(r, (-.5, 1.02, -.02), (.12, .02, .12), col=ORO, model=cilindro(10, start=-.5))
         blocco(r, (-.5, 1.1, -.02), (.025, .16, .025), col=ORO)
         blocco(r, (-.5, 1.17, -.02), (.26, .02, .02), col=ORO)
         for dx in (-.12, 0, .12):
@@ -1300,8 +1397,8 @@ class Gioco(Entity):
         for sx in (-1, 1):
             for sz in (-1, 1):
                 blocco(r, (sx * .34, .25, -.85 + sz * .14), (.05, .5, .05), col=C(40, 26, 18))
-        Entity(parent=r, model="cube", collider="box", position=(0, .9, .6), scale=(1.7, 1.8, 2.3), visible=False,
-               id_oggetto="pianoforte")
+        self.piano_hitbox = Entity(parent=r, model="cube", collider="box", position=(0, .9, .6), scale=(1.7, 1.8, 2.3),
+                                   visible=False, id_oggetto="pianoforte")
         self.ostacoli += [(-3.75, 1.4, -1.55, 3.0), (-1.3, 1.75, -.95, 2.65)]
 
     def _costruisci_scrivania(self):
@@ -1317,14 +1414,14 @@ class Gioco(Entity):
             blocco(r, (sx * .52, .08, 0), (.52, .16, .76), col=LEGNO_SCURO)
         # oggetti sul piano
         blocco(r, (.05, .815, -.05), (.34, .005, .44), texture=self.t_lettera, rot=(0, 12, 0))
-        blocco(r, (.45, .84, .1), (.1, .08, .1), col=C(16, 16, 24), model=Cylinder(12, start=-.5))
-        blocco(r, (.45, .885, .1), (.05, .02, .05), col=ORO_SCURO, model=Cylinder(10, start=-.5))
+        blocco(r, (.45, .84, .1), (.1, .08, .1), col=C(16, 16, 24), model=cilindro(12, start=-.5))
+        blocco(r, (.45, .885, .1), (.05, .02, .05), col=ORO_SCURO, model=cilindro(10, start=-.5))
         penna = Entity(parent=r, position=(.45, .9, .1), rotation=(0, 20, -25))
         blocco(penna, (.0, .16, 0), (.012, .34, .012), col=C(230, 222, 204))
         blocco(penna, (.0, .24, 0), (.06, .2, .006), col=C(240, 236, 226))
         for k, c in enumerate((C(92, 18, 30), C(22, 60, 40), C(40, 34, 70))):
             blocco(r, (-.45, .83 + k * .05, .18), (.34 - k * .03, .05, .24), col=c, rot=(0, k * 8, 0))
-        blocco(r, (-.6, .81, -.15), (.14, .02, .14), col=ORO, model=Cylinder(12, start=-.5))
+        blocco(r, (-.6, .81, -.15), (.14, .02, .14), col=ORO, model=cilindro(12, start=-.5))
         self._candela(r, (-.6, .82, -.15), .22, 1.1, {"col": Vec3(1.5, .9, .45), "tremolio": .35})
         # sedia
         blocco(r, (0, .45, -.7), (.5, .06, .48), col=C(60, 38, 22), texture=self.t_legno)
@@ -1356,7 +1453,7 @@ class Gioco(Entity):
             blocco(corona, (dx, h + .02, 0), (.05, .05, .05), col=ORO_CHIARO, model="sphere")
         blocco(corona, (0, .01, -.035), (.05, .05, .02), col=C(200, 30, 40), model="sphere")
         # lampada da quadro
-        blocco(r, (0, .86, -.14), (.5, .05, .06), col=ORO_SCURO, model=Cylinder(10, start=-.5, direction=(1, 0, 0)))
+        blocco(r, (0, .86, -.14), (.5, .05, .06), col=ORO_SCURO, model=cilindro(10, start=-.5, direction=(1, 0, 0)))
         Entity(parent=r, model="cube", collider="box", position=(0, 0, -.2), scale=(1.3, 1.9, .4), visible=False,
                id_oggetto="ritratto")
 
@@ -1366,7 +1463,7 @@ class Gioco(Entity):
         blocco(r, (0, 0, 0), (1.5, 1.05, .01), texture=self.t_mappa)
         for y in (.56, -.56):
             blocco(r, (0, y, -.02), (1.64, .07, .07), col=C(90, 58, 34), texture=self.t_legno,
-                   model=Cylinder(12, start=-.5, direction=(1, 0, 0)))
+                   model=cilindro(12, start=-.5, direction=(1, 0, 0)))
             for x in (-.84, .84):
                 blocco(r, (x, y, -.02), (.08, .1, .1), col=ORO, model="sphere")
         blocco(r, (-.4, .82, -.01), (.01, .5, .01), col=C(120, 90, 60), rot=(0, 0, -58))
@@ -1376,7 +1473,7 @@ class Gioco(Entity):
         mob = Entity(parent=self.mondo, position=(3.7, 0, -.7), rotation_y=90)
         blocco(mob, (0, .4, 0), (1.1, .8, .45), texture=self.t_legno)
         blocco(mob, (0, .81, 0), (1.2, .03, .5), col=LEGNO_SCURO)
-        blocco(mob, (-.3, .9, 0), (.12, .16, .12), col=ORO_SCURO, model=Cylinder(10, start=-.5))
+        blocco(mob, (-.3, .9, 0), (.12, .16, .12), col=ORO_SCURO, model=cilindro(10, start=-.5))
         globo = blocco(mob, (-.3, 1.12, 0), (.3, .3, .3), col=C(170, 150, 110), model="sphere")
         globo.rotation = (0, 0, 23)
         self.globo = globo
@@ -1394,7 +1491,7 @@ class Gioco(Entity):
         blocco(r, (0, .02, -.25), (1.9, .04, .5), texture=self.t_pietra)
         for k, (x, rot) in enumerate(((-.25, 20), (.2, -15), (0, 90))):
             blocco(r, (x, .12 + (k == 2) * .08, .05), (.5, .1, .1), col=C(70, 44, 26),
-                   rot=(0, rot, 0), model=Cylinder(8, start=-.5, direction=(1, 0, 0)))
+                   rot=(0, rot, 0), model=cilindro(8, start=-.5, direction=(1, 0, 0)))
         for i in range(5):
             x = -.3 + i * .15
             f = sprite_luminoso(r, (x, .32 + (i % 2) * .05, .05), (.22, .42), self.t_fiamma, C(255, 180, 90))
@@ -1451,8 +1548,8 @@ class Gioco(Entity):
     def _costruisci_lampadario(self):
         r = Entity(parent=self.mondo, position=(0, 2.75, .3))
         blocco(r, (0, .33, 0), (.02, .65, .02), col=FERRO)
-        blocco(r, (0, 0, 0), (.9, .03, .9), col=FERRO, model=Cylinder(24, start=-.5))
-        blocco(r, (0, .005, 0), (.82, .04, .82), col=C(30, 30, 34), model=Cylinder(24, start=-.5))
+        blocco(r, (0, 0, 0), (.9, .03, .9), col=FERRO, model=cilindro(24, start=-.5))
+        blocco(r, (0, .005, 0), (.82, .04, .82), col=C(30, 30, 34), model=cilindro(24, start=-.5))
         for i in range(6):
             a = i * math.tau / 6
             self._candela(r, (math.cos(a) * .4, .03, math.sin(a) * .4), .12, .8,
@@ -1520,6 +1617,12 @@ class Gioco(Entity):
         self.aiuto = testo_ui(self.hud, "WASD: muoviti  ·  Mouse: guarda  ·  Clic: esamina\n"
                               "Esc: pausa  ·  M: audio  ·  F11: schermo intero",
                               (0, -.49), .65, C(190, 170, 140), "i", (.5, -.5))
+        self.guida_piano = Entity(parent=ui, enabled=False)
+        quad_ui(self.guida_piano, (0, -.27), (1.1, .1), C(8, 6, 8, 170))
+        testo_ui(self.guida_piano, "Suona!  Tasti bianchi: A S D F G H J K L   ·   neri: W E T Y U O P",
+                 (0, -.255), 1.05, ORO_CHIARO, "b", z=-.01)
+        testo_ui(self.guida_piano, "oppure clicca i tasti del pianoforte   ·   Esc per alzarti", (0, -.29), .9,
+                 PERGAMENA, "i", z=-.01)
         self.pausa = Entity(parent=ui, enabled=False, z=-3)
         quad_ui(self.pausa, (0, 0), (4, 1.2), C(0, 0, 0, 170))
         testo_ui(self.pausa, "IN PAUSA", (0, .06), 3, ORO, "b", z=-.01)
@@ -1618,6 +1721,9 @@ class Gioco(Entity):
         self.ultimo_secondo = None
         self.mirato = None
         self.t_chiusura = 0.0
+        if getattr(self, "al_piano", False):
+            self.alzati()
+        self.al_piano = False
         self.pos = Vec3(0, 0, -1.9)
         self.yaw, self.pitch = 0.0, 0.0
         self.passo = 0.0
@@ -1694,6 +1800,32 @@ class Gioco(Entity):
             self.mostra_toast("Hai già svelato il segreto: frammento «%s»." % ENIGMI_PER_ID[oid]["frammento"], PERGAMENA)
         else:
             self.apri_modale(ENIGMI_PER_ID[oid])
+
+    def siediti_al_piano(self):
+        self.al_piano = True
+        self.mirato = None
+        self.piano_hitbox.collider = None          # così il mouse "vede" i singoli tasti
+        self.guida_piano.enabled = True
+        self.toast_t0 = -100
+        self._blocca_mouse(False)
+        self.suoni.volume_musica(.12)
+        self.suoni.suona("click")
+
+    def alzati(self):
+        self.al_piano = False
+        self.piano_hitbox.collider = "box"
+        self.guida_piano.enabled = False
+        self.suoni.volume_musica(.38)
+        if self.stato == "gioco" and not self.modale.enabled:
+            self._blocca_mouse(True)
+
+    def suona_tasto(self, midi):
+        tasto = self.tasti.get(midi)
+        if tasto is None:
+            return
+        self.suoni.nota_piano(midi)
+        tasto.y = tasto.y0 - .012
+        tasto.animate_y(tasto.y0, duration=.18, curve=curve.out_quad)
 
     def apri_modale(self, enigma):
         self.suoni.suona("click")
@@ -1812,6 +1944,8 @@ class Gioco(Entity):
     def fuga(self):
         """Parola d'ordine corretta: la porta si apre e si esce verso la luce."""
         self.tempo_congelato = self.tempo_rimasto()
+        if self.al_piano:
+            self.alzati()
         self.stato = "fuga"
         self.t_evento = time.monotonic()
         self._blocca_mouse(False)
@@ -1843,6 +1977,8 @@ class Gioco(Entity):
     def irruzione(self):
         """Tempo scaduto: i gendarmi sfondano la porta."""
         self.tempo_congelato = 0.0
+        if self.al_piano:
+            self.alzati()
         self.stato = "irruzione"
         self.t_evento = time.monotonic()
         self.modale.enabled = False
@@ -1872,6 +2008,8 @@ class Gioco(Entity):
                 application.quit()
             elif self.modale.enabled:
                 self.chiudi_modale()
+            elif self.al_piano:
+                self.alzati()
             elif self.stato == "gioco" and mouse.locked:
                 self._blocca_mouse(False)
             return
@@ -1884,6 +2022,15 @@ class Gioco(Entity):
             self.avvia()
             return
         if self.stato != "gioco" or self.modale.enabled:
+            return
+        if self.al_piano:
+            if key in TASTI_PIANO:
+                self.suona_tasto(TASTI_PIANO[key])
+            elif key == "left mouse down" and getattr(mouse.hovered_entity, "nota", None):
+                self.suona_tasto(mouse.hovered_entity.nota)
+            return
+        if key == "p" and self.mirato == "pianoforte" and mouse.locked:
+            self.siediti_al_piano()
             return
         if key == "m":
             self.suoni.attivo = not self.suoni.attivo
@@ -1914,10 +2061,14 @@ class Gioco(Entity):
                     if self.ultimo_secondo is not None and sec <= 60:
                         self.suoni.suona("tick")
                     self.ultimo_secondo = sec
-                if not self.modale.enabled and mouse.locked:
-                    self._muovi(dt)
-                self._applica_camera()
-                self._aggiorna_mira()
+                if self.al_piano:
+                    camera.position = lerp(camera.position, self.piano_occhi.world_position, min(1, dt * 6))
+                    camera.look_at(self.piano_mira.world_position)
+                else:
+                    if not self.modale.enabled and mouse.locked:
+                        self._muovi(dt)
+                    self._applica_camera()
+                    self._aggiorna_mira()
         elif self.stato == "fuga":
             e = t - self.t_evento
             u = min(1.0, max(0.0, (e - .6) / 2.4))
@@ -2006,6 +2157,8 @@ class Gioco(Entity):
             self.suggerimento.text = e["nome"]
             self.suggerimento2.text = ("Risolto  ·  frammento «%s»" % e["frammento"] if mirato in self.risolti else
                                        "Clic per esaminare")
+            if mirato == "pianoforte":
+                self.suggerimento2.text += "   ·   P: siediti e suona"
         if mirato is not None:
             self.sugg_sfondo.scale_x = max(self.suggerimento.width, self.suggerimento2.width) + .05
 
@@ -2067,8 +2220,11 @@ class Gioco(Entity):
             alpha = 1.0 if eta < 3.2 else (4.0 - eta) / .8
             self.toast.alpha = alpha
             self.toast_sfondo.alpha = .8 * alpha
-        self.pausa.enabled = self.stato == "gioco" and not self.modale.enabled and not mouse.locked
-        self.mirino.enabled = self.stato == "gioco" and not self.modale.enabled
+        self.pausa.enabled = self.stato == "gioco" and not self.modale.enabled and not mouse.locked and not self.al_piano
+        self.mirino.enabled = self.stato == "gioco" and not self.modale.enabled and not self.al_piano
+        if self.al_piano:
+            self.mirino_anello.enabled = self.sugg_sfondo.enabled = False
+            self.suggerimento.text = self.suggerimento2.text = ""
         if self.scuoti > 0:
             self.scuoti = max(0.0, self.scuoti - dt)
             dx = math.sin(self.scuoti * 70) * .02 * (self.scuoti / .45)

@@ -29,7 +29,8 @@ python il_segreto_del_carbonaro_3d.py
 - Luci di candela tremolanti calcolate da uno shader GLSL scritto apposta: 6 luci per pixel con riflessi, nebbia e tone mapping.
 - Gli oggetti risolti si illuminano di verde e oro, mostrano un sigillo di ceralacca fluttuante e non si possono più riaprire.
 - L'orologio sul camino segna il tempo che resta.
-- Musica di sottofondo di leggera suspense, composta e sintetizzata dal codice: loop in Re minore con basso pizzicato, arpeggi, archi morbidi, carillon e tic-tac.
+- **Il pianoforte si può suonare**: inquadralo e premi **P** per sederti, poi suona con A S D F G H J K L (tasti bianchi) e W E T Y U O P (tasti neri), oppure clicca direttamente i tasti. Esc per alzarti.
+- Musica di sottofondo di leggera suspense, composta e sintetizzata dal codice: loop in Re minore con basso pizzicato, arpeggi, archi morbidi, carillon e tic-tac, con un filtro che rende il suono più tondo.
 - Il crepitio del camino è morbido e si sente di più solo quando ti avvicini al fuoco.
 - Texture generate con PIL e suoni sintetizzati: nessun file esterno. Con M spegni musica ed effetti.
 - Timer di 45:00 in tempo reale. Nell'ultimo minuto diventa rosso e ticchetta. Allo scadere i gendarmi sfondano la porta.
