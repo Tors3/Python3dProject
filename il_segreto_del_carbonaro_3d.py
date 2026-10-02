@@ -31,8 +31,12 @@ import wave
 from array import array
 
 from panda3d.core import (ColorBlendAttrib, Filename, LVecBase3f, PTA_LVecBase3f,
-                          TransparencyAttrib)
+                          TransparencyAttrib, loadPrcFileData)
 from PIL import Image, ImageDraw, ImageFilter, ImageFont
+
+# Su Windows i percorsi non distinguono maiuscole e minuscole (C:\WINDOWS = C:\Windows),
+# ma Panda3D di default sì: senza questa riga rifiuta file che esistono davvero.
+loadPrcFileData("", "vfs-case-sensitive 0")
 
 # --------------------------------------------------------------------------
 # Configurazione
@@ -219,10 +223,25 @@ def _trova_font(tipo):
 FONT_FILE = {k: _trova_font(k) for k in "rbi"}
 
 
+_FONT_UI = {}
+
+
 def font_ui(tipo):
-    """Percorso del font per Ursina (None = font predefinito)."""
-    p = FONT_FILE[tipo] or FONT_FILE["r"]
-    return Filename.fromOsSpecific(p).getFullpath() if p else None
+    """Percorso del font per Ursina, già verificato (None = font predefinito di Ursina)."""
+    if tipo not in _FONT_UI:
+        _FONT_UI[tipo] = None
+        for p in (FONT_FILE[tipo], FONT_FILE["r"]):
+            if not p:
+                continue
+            try:
+                # realpath restituisce il percorso con le maiuscole corrette
+                percorso = Filename.fromOsSpecific(os.path.realpath(p)).getFullpath()
+                loader.loadFont(percorso)          # solleva un errore se Panda3D non riesce a leggerlo
+                _FONT_UI[tipo] = percorso
+                break
+            except Exception as ex:
+                print("Font non caricabile, uso un ripiego:", p, ex)
+    return _FONT_UI[tipo]
 
 
 _PIL_FONT = {}
